@@ -10,14 +10,11 @@ use std as stdlib;
 
 #[cfg(not(feature = "std"))]
 mod stdlib {
-    pub use ::alloc::{borrow, boxed, collections, format, rc, string, vec};
+    pub use ::alloc::vec;
     pub use core::*;
 }
 
 use stdlib::{f32, vec::Vec};
-
-#[cfg(not(feature = "std"))]
-use num_traits::Float;
 
 use embedded_graphics::{
     draw_target::DrawTarget,
@@ -44,6 +41,9 @@ pub struct FontTextStyle<C: PixelColor> {
     /// Background color.
     pub background_color: Option<C>,
 
+    /// Replace anti-aliasing with solid color (based on transparency vakue, cleaner when background color is None)
+    pub aliasing_filter: Option<u8>,
+
     /// Underline color.
     pub underline_color: DecorationColor<C>,
 
@@ -58,7 +58,7 @@ pub struct FontTextStyle<C: PixelColor> {
 }
 
 impl<C: PixelColor> FontTextStyle<C> {
-    // Creates a text style with transparent background.
+    /// Creates a text style with transparent background.
     pub fn new(font: Font<'static>, text_color: C, font_size: u32) -> Self {
         FontTextStyleBuilder::new(font)
             .text_color(text_color)
@@ -108,8 +108,9 @@ impl<C: PixelColor> FontTextStyle<C> {
         D: DrawTarget<Color = C>,
     {
         if let Some(strikethrough_color) = self.resolve_decoration_color(self.strikethrough_color) {
-            let top_left = position + Point::new(0, 0);
-            let size = Size::new(width, self.font_size);
+            let top_left = position + Point::new(0, self.font_size as i32 / 2);
+            // small strikethrough width
+            let size = Size::new(width, self.font_size/30+1);
 
             target.fill_solid(&Rectangle::new(top_left, size), strikethrough_color)?;
         }
@@ -122,8 +123,9 @@ impl<C: PixelColor> FontTextStyle<C> {
         D: DrawTarget<Color = C>,
     {
         if let Some(underline_color) = self.resolve_decoration_color(self.underline_color) {
-            let top_left = position + Point::new(0, 0);
-            let size = Size::new(width, self.font_size);
+            let top_left = position + Point::new(0, self.font_size as i32);
+            // small underline width
+            let size = Size::new(width, self.font_size/30 + 1);
 
             target.fill_solid(&Rectangle::new(top_left, size), underline_color)?;
         }
@@ -205,7 +207,7 @@ where
                             let (text_r, text_g, text_b, text_a) =
                                 u32_to_rgba(c << 24 | (pixel_color_to_u32(text_color) & 0xFFFFFF));
 
-                            let (text_r, text_g, text_b) = rgba_background_to_rgb(
+                            let (new_r, new_g, new_b) = rgba_background_to_rgb(
                                 text_r,
                                 text_g,
                                 text_b,
@@ -213,11 +215,18 @@ where
                                 self.background_color,
                             );
 
-                            if text_a > 0 {
+                            if self.aliasing_filter.is_none() && text_a > 0 {
                                 pixels.push(Pixel(
                                     Point::new(position.x + off_x, position.y + off_y),
-                                    Rgb888::new(text_r, text_g, text_b).into(),
+                                    Rgb888::new(new_r, new_g, new_b).into(),
                                 ));
+                            } else if let Some(filter) = self.aliasing_filter {
+                                if text_a >= filter {
+                                    pixels.push(Pixel(
+                                        Point::new(position.x + off_x, position.y + off_y),
+                                        Rgb888::new(text_r, text_g, text_b).into(),
+                                    ));
+                                }
                             }
                         }
                     });
@@ -230,7 +239,7 @@ where
         self.draw_strikethrough(width as u32, position, target)?;
         self.draw_underline(width as u32, position, target)?;
 
-        Ok(position)
+        Ok(position + Point::new(width, 0))
     }
 
     fn draw_whitespace<D>(
@@ -293,6 +302,7 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
             style: FontTextStyle {
                 font,
                 background_color: None,
+                aliasing_filter: None,
                 font_size: 12,
                 text_color: None,
                 underline_color: DecorationColor::None,
@@ -331,14 +341,18 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
     /// Sets the background color.
     pub fn background_color(mut self, background_color: C) -> Self {
         self.style.background_color = Some(background_color);
+        self
+    }
 
+    /// Replace antialiasing by an alpha channel cutoff
+    pub fn aliasing_filter(mut self, alpha_filter: u8) -> Self {
+        self.style.aliasing_filter = Some(alpha_filter);
         self
     }
 
     /// Enables underline with a custom color.
     pub fn underline_with_color(mut self, underline_color: C) -> Self {
         self.style.underline_color = DecorationColor::Custom(underline_color);
-
         self
     }
 
@@ -400,6 +414,7 @@ fn rgba_background_to_rgb<C: Into<Rgb888>>(
         let alpha = a as f32 / 255.;
         let b_alpha = 1. - alpha;
 
+        // blend with background color
         return (
             ((r as f32 * alpha) + br as f32 * b_alpha).ceil() as u8,
             ((g as f32 * alpha) + bg as f32 * b_alpha).ceil() as u8,
@@ -407,6 +422,7 @@ fn rgba_background_to_rgb<C: Into<Rgb888>>(
         );
     }
 
+    // this is equivalent to blending with black
     rgba_to_rgb(r, g, b, a)
 }
 
