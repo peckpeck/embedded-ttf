@@ -5,6 +5,9 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+#[cfg(not(feature = "std"))]
+use num_traits::float::FloatCore;
+
 #[cfg(feature = "std")]
 use std as stdlib;
 
@@ -12,6 +15,7 @@ use std as stdlib;
 mod stdlib {
     pub use ::alloc::vec;
     pub use core::*;
+
 }
 
 use stdlib::{f32, vec::Vec};

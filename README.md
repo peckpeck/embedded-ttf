@@ -1,4 +1,4 @@
-# embedded_font
+# embedded-ttf
 
 Font rendering (ttf and otf) for embedded-graphics (no_std).
 

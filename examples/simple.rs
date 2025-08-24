@@ -1,7 +1,7 @@
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*, text::Text, Drawable};
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, Window};
 
-use embedded_font::*;
+use embedded_ttf::*;
 use rusttype::Font;
 
 fn main() -> Result<(), core::convert::Infallible> {
