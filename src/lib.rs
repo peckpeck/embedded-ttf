@@ -15,7 +15,6 @@ use std as stdlib;
 mod stdlib {
     pub use ::alloc::vec;
     pub use core::*;
-
 }
 
 use stdlib::{f32, vec::Vec};
@@ -45,7 +44,7 @@ pub struct FontTextStyle<C: PixelColor> {
     /// Background color.
     pub background_color: Option<C>,
 
-    /// Replace anti-aliasing with solid color (based on transparency vakue, cleaner when background color is None)
+    /// Replace anti-aliasing with solid color (based on transparency value, cleaner when background color is None)
     pub aliasing_filter: Option<u8>,
 
     /// Underline color.

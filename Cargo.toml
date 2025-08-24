@@ -1,12 +1,12 @@
 [package]
 edition = "2021"
 name = "embedded-ttf"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Florian Blasius <flovanpt@posteo.de>", "Benoit Peccatte <benoit.peccatte@ruder.io>"]
 description = "Font rendering (ttf and otf) with embedded-graphics."
 keywords = ["text", "font", "embedded", "no_std"]
 license = "MIT"
-repository = "https://codeberg.org/morphUI/embedded_font"
+repository = "https://github.com/peckpeck/embedded-ttf"
 
 [dependencies]
 embedded-graphics = "0.8.1"

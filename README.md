@@ -2,11 +2,9 @@
 
 Font rendering (ttf and otf) for embedded-graphics (no_std).
 
-<a href="TODO">Repository</a>
-
-[![crates.io](https://img.shields.io/badge/crates.io-0.1.1-orange.svg)](https://crates.io/crates/embedded-ttf)
-[![docs.rs](https://img.shields.io/badge/docs-0.1.1-blue.svg)](https://docs.rs/embedded-ttf/0.2.0/embedded-ttf/)
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![crates.io](https://img.shields.io/crates/v/embedded-ttf)]
+[![docs.rs](https://img.shields.io/docsrs/embedded-ttf)]
+[![Crates.io License](https://img.shields.io/crates/l/embedded-ttf/0.2.0)]
 
 ## Notable dependencies
 
