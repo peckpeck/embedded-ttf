@@ -3,10 +3,13 @@ edition = "2021"
 name = "embedded-ttf"
 version = "0.2.1"
 authors = ["Florian Blasius <flovanpt@posteo.de>", "Benoit Peccatte <benoit.peccatte@ruder.io>"]
-description = "Font rendering (ttf and otf) with embedded-graphics."
+description = "Font rendering (ttf and otf) with embedded-graphics"
 keywords = ["text", "font", "embedded", "no_std"]
+categories = ["embedded", "no-std"]
+readme = "./README.md"
 license = "MIT"
 repository = "https://github.com/peckpeck/embedded-ttf"
+documentation = "https://docs.rs/embedded-ttf"
 
 [dependencies]
 embedded-graphics = "0.8.1"
