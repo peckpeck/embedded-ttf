@@ -1,4 +1,28 @@
 //! Font rendering (ttf and otf) with embedded-graphics.
+//!
+//! Embedded graphics provides static mono font rendering directly from the code.
+//! But it can render any font if the proper trait is implemented.
+//!
+//! This is an implementation that uses the [rusttype](https://gitlab.redox-os.org/redox-os/rusttype)
+//! crate to parse ttf and otf fonts before rendering them on a `DrawTarget`
+//!
+//! # Usage
+//!
+//! Use [`FontTextStyleBuilder`] to easily create a [`FontTextStyle`] object.
+//!
+//! This style can then be directly used with embedded graphics' [`Text`] struct.
+//!
+//! ```
+//! let mut display: SimulatorDisplay<Rgb565> = SimulatorDisplay::new(Size::new(350, 200));
+//!
+//! let style = FontTextStyleBuilder::new(
+//!     Font::try_from_bytes(include_bytes!("../assets/Roboto-Regular.ttf")).unwrap())
+//!     .font_size(16)
+//!     .text_color(Rgb565::WHITE)
+//!     .build();
+//!
+//! Text::new("Hello World!", Point::new(15, 30), style).draw(&mut display)?;
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -56,12 +80,12 @@ pub struct FontTextStyle<C: PixelColor> {
     /// Font size.
     pub font_size: u32,
 
-    /// Font.
+    /// Font from rusttype.
     font: Font<'static>,
 }
 
 impl<C: PixelColor> FontTextStyle<C> {
-    /// Creates a text style with transparent background.
+    /// Creates a text style with a transparent background.
     pub fn new(font: Font<'static>, text_color: C, font_size: u32) -> Self {
         FontTextStyleBuilder::new(font)
             .text_color(text_color)
@@ -113,7 +137,7 @@ impl<C: PixelColor> FontTextStyle<C> {
         if let Some(strikethrough_color) = self.resolve_decoration_color(self.strikethrough_color) {
             let top_left = position + Point::new(0, self.font_size as i32 / 2);
             // small strikethrough width
-            let size = Size::new(width, self.font_size/30+1);
+            let size = Size::new(width, self.font_size / 30 + 1);
 
             target.fill_solid(&Rectangle::new(top_left, size), strikethrough_color)?;
         }
@@ -128,7 +152,7 @@ impl<C: PixelColor> FontTextStyle<C> {
         if let Some(underline_color) = self.resolve_decoration_color(self.underline_color) {
             let top_left = position + Point::new(0, self.font_size as i32);
             // small underline width
-            let size = Size::new(width, self.font_size/30 + 1);
+            let size = Size::new(width, self.font_size / 30 + 1);
 
             target.fill_solid(&Rectangle::new(top_left, size), underline_color)?;
         }
@@ -293,13 +317,13 @@ where
 
 /// Text style builder for ttf and otf fonts.
 ///
-/// Use this builder to create [`MonoTextStyle`]s for [`Text`].
+/// Use this builder to create [`FontTextStyle`]s for [`Text`].
 pub struct FontTextStyleBuilder<C: PixelColor> {
     style: FontTextStyle<C>,
 }
 
 impl<C: PixelColor> FontTextStyleBuilder<C> {
-    /// Creates a new text style builder.
+    /// Create a new text style builder.
     pub fn new(font: Font<'static>) -> Self {
         Self {
             style: FontTextStyle {
@@ -314,64 +338,57 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
         }
     }
 
-    /// Builder method used to set the font size of the style.
+    /// Set the font size of the style in pixels.
     pub fn font_size(mut self, font_size: u32) -> Self {
         self.style.font_size = font_size;
         self
     }
 
-    /// Enables underline using the text color.
+    /// Enable underline using the text color.
     pub fn underline(mut self) -> Self {
         self.style.underline_color = DecorationColor::TextColor;
-
         self
     }
 
-    /// Enables strikethrough using the text color.
+    /// Enable strikethrough using the text color.
     pub fn strikethrough(mut self) -> Self {
         self.style.strikethrough_color = DecorationColor::TextColor;
-
         self
     }
 
-    /// Sets the text color.
+    /// Set the text color.
     pub fn text_color(mut self, text_color: C) -> Self {
         self.style.text_color = Some(text_color);
-
         self
     }
 
-    /// Sets the background color.
+    /// Set the background color.
     pub fn background_color(mut self, background_color: C) -> Self {
         self.style.background_color = Some(background_color);
         self
     }
 
-    /// Replace antialiasing by an alpha channel cutoff
+    /// Replace antialiasing by an alpha channel cutoff.
+    /// Do not use, this will be replaced
     pub fn aliasing_filter(mut self, alpha_filter: u8) -> Self {
         self.style.aliasing_filter = Some(alpha_filter);
         self
     }
 
-    /// Enables underline with a custom color.
+    /// Enable underline with a custom color.
     pub fn underline_with_color(mut self, underline_color: C) -> Self {
         self.style.underline_color = DecorationColor::Custom(underline_color);
         self
     }
 
-    /// Enables strikethrough with a custom color.
+    /// Enable strikethrough with a custom color.
     pub fn strikethrough_with_color(mut self, strikethrough_color: C) -> Self {
         self.style.strikethrough_color = DecorationColor::Custom(strikethrough_color);
 
         self
     }
 
-    /// Builds the text style.
-    ///
-    /// This method can only be called after a font was set by using the [`font`] method. All other
-    /// settings are optional and they will be set to their default value if they are missing.
-    ///
-    /// [`font`]: #method.font
+    /// Build the text style.
     pub fn build(self) -> FontTextStyle<C> {
         self.style
     }
