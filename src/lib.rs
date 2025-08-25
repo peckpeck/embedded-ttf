@@ -56,20 +56,34 @@ use embedded_graphics::{
 
 use rusttype::Font;
 
+/// Antialiasing can be difficult with embedded graphics since the background pixel is not known
+/// during the drawing process.
+#[derive(Debug, Clone)]
+pub enum AntiAliasing<C> {
+    /// Use the font background color (default), choose this if you defined a background color.
+    /// This is equivalent to SolidColor if the background color is defined,
+    /// This is equivalent to None if the background color is not defined
+    BackgroundColor,
+    /// Use given color as a "known" background color.
+    SolidColor(C),
+    /// Replace the alpha channel with a simple transparency (cutoff at 50%), choose this if you don't know the background at all.
+    None,
+}
+
 /// Style properties for text using a ttf and otf font.
 ///
 /// A `FontTextStyle` can be applied to a [`Text`] object to define how the text is drawn.
 ///
 #[derive(Debug, Clone)]
-pub struct FontTextStyle<C: PixelColor> {
+pub struct FontTextStyle<C> {
     /// Text color.
     pub text_color: Option<C>,
 
     /// Background color.
     pub background_color: Option<C>,
 
-    /// Replace anti-aliasing with solid color (based on transparency value, cleaner when background color is None)
-    pub aliasing_filter: Option<u8>,
+    /// How to apply antialiasing.
+    pub anti_aliasing: AntiAliasing<C>,
 
     /// Underline color.
     pub underline_color: DecorationColor<C>,
@@ -170,6 +184,10 @@ impl<C: PixelColor> CharacterStyle for FontTextStyle<C> {
 
     fn set_background_color(&mut self, background_color: Option<Self::Color>) {
         self.background_color = background_color;
+        if background_color.is_some() {
+            // best antialiasing in this case
+            self.anti_aliasing = AntiAliasing::BackgroundColor;
+        }
     }
 
     fn set_underline_color(&mut self, underline_color: DecorationColor<Self::Color>) {
@@ -234,24 +252,29 @@ where
                             let (text_r, text_g, text_b, text_a) =
                                 u32_to_rgba(c << 24 | (pixel_color_to_u32(text_color) & 0xFFFFFF));
 
-                            let (new_r, new_g, new_b) = rgba_background_to_rgb(
-                                text_r,
-                                text_g,
-                                text_b,
-                                text_a,
-                                self.background_color,
-                            );
-
-                            if self.aliasing_filter.is_none() && text_a > 0 {
-                                pixels.push(Pixel(
-                                    Point::new(position.x + off_x, position.y + off_y),
-                                    Rgb888::new(new_r, new_g, new_b).into(),
-                                ));
-                            } else if let Some(filter) = self.aliasing_filter {
-                                if text_a >= filter {
+                            let bg_color = match self.anti_aliasing {
+                                AntiAliasing::BackgroundColor => self.background_color,
+                                AntiAliasing::SolidColor(c) => Some(c),
+                                AntiAliasing::None => None,
+                            };
+                            match bg_color {
+                                None => if text_a > 127 {
                                     pixels.push(Pixel(
                                         Point::new(position.x + off_x, position.y + off_y),
                                         Rgb888::new(text_r, text_g, text_b).into(),
+                                    ));
+                                }
+                                Some(color) => {
+                                    let (new_r, new_g, new_b) = rgba_blend(
+                                        text_r,
+                                        text_g,
+                                        text_b,
+                                        text_a,
+                                        color,
+                                    );
+                                    pixels.push(Pixel(
+                                        Point::new(position.x + off_x, position.y + off_y),
+                                        Rgb888::new(new_r, new_g, new_b).into(),
                                     ));
                                 }
                             }
@@ -329,7 +352,7 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
             style: FontTextStyle {
                 font,
                 background_color: None,
-                aliasing_filter: None,
+                anti_aliasing: AntiAliasing::None,
                 font_size: 12,
                 text_color: None,
                 underline_color: DecorationColor::None,
@@ -359,6 +382,7 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
     /// Set the text color.
     pub fn text_color(mut self, text_color: C) -> Self {
         self.style.text_color = Some(text_color);
+        self.style.anti_aliasing = AntiAliasing::BackgroundColor;
         self
     }
 
@@ -368,10 +392,9 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
         self
     }
 
-    /// Replace antialiasing by an alpha channel cutoff.
-    /// Do not use, this will be replaced
-    pub fn aliasing_filter(mut self, alpha_filter: u8) -> Self {
-        self.style.aliasing_filter = Some(alpha_filter);
+    /// Apply antialiasing over a known color.
+    pub fn anti_aliasing_color(mut self, background_color: C) -> Self {
+        self.style.anti_aliasing = AntiAliasing::SolidColor(background_color);
         self
     }
 
@@ -419,31 +442,26 @@ fn rgba_to_rgb(r: u8, g: u8, b: u8, a: u8) -> (u8, u8, u8) {
     )
 }
 
-fn rgba_background_to_rgb<C: Into<Rgb888>>(
+fn rgba_blend<C: Into<Rgb888>>(
     r: u8,
     g: u8,
     b: u8,
     a: u8,
-    background_color: Option<C>,
+    background_color: C,
 ) -> (u8, u8, u8) {
-    if let Some(background_color) = background_color {
-        let background_color_data = pixel_color_to_u32(background_color);
-        let (br, bg, bb, ba) = u32_to_rgba(background_color_data);
-        let (br, bg, bb) = rgba_to_rgb(br, bg, bb, ba);
+    let background_color_data = pixel_color_to_u32(background_color);
+    let (br, bg, bb, ba) = u32_to_rgba(background_color_data);
+    let (br, bg, bb) = rgba_to_rgb(br, bg, bb, ba);
 
-        let alpha = a as f32 / 255.;
-        let b_alpha = 1. - alpha;
+    let alpha = a as f32 / 255.;
+    let b_alpha = 1. - alpha;
 
-        // blend with background color
-        return (
-            ((r as f32 * alpha) + br as f32 * b_alpha).ceil() as u8,
-            ((g as f32 * alpha) + bg as f32 * b_alpha).ceil() as u8,
-            ((b as f32 * alpha) + bb as f32 * b_alpha).ceil() as u8,
-        );
-    }
-
-    // this is equivalent to blending with black
-    rgba_to_rgb(r, g, b, a)
+    // blend with background color
+    (
+        ((r as f32 * alpha) + br as f32 * b_alpha).ceil() as u8,
+        ((g as f32 * alpha) + bg as f32 * b_alpha).ceil() as u8,
+        ((b as f32 * alpha) + bb as f32 * b_alpha).ceil() as u8,
+    )
 }
 
 #[cfg(test)]

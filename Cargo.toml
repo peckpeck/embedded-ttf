@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "embedded-ttf"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Florian Blasius <flovanpt@posteo.de>", "Benoit Peccatte <benoit.peccatte@ruder.io>"]
 description = "Font rendering (ttf and otf) with embedded-graphics"
 keywords = ["text", "font", "embedded", "no_std"]
@@ -12,13 +12,13 @@ repository = "https://github.com/peckpeck/embedded-ttf"
 documentation = "https://docs.rs/embedded-ttf"
 
 [dependencies]
-embedded-graphics = "0.8.1"
-rusttype = { version = "0.9.3", default-features = false }
-num-traits = { version = "0.2.19", default-features = false }
+embedded-graphics = "0.8"
+rusttype = { version = "0.9", default-features = false }
+num-traits = { version = "0.2", default-features = false }
 
 [dev-dependencies]
-embedded-graphics-simulator = "0.7.0"
-embedded-text = "0.4.0"
+embedded-graphics-simulator = "0.7"
+embedded-text = "0.4"
 
 [features]
 default = ["rusttype/libm-math", "num-traits/libm"]
