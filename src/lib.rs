@@ -23,6 +23,15 @@
 //!
 //! Text::new("Hello World!", Point::new(15, 30), style).draw(&mut display)?;
 //! ```
+//!
+//! # Antialiasing
+//!
+//! TrueType fonts are much nicer with antialiasing. However, embedded_graphics does not support
+//! retrieving current pixel while drawing, which prevents alpha blending and antialiasing.
+//!
+//! If you have a background color, the color is known and antialiasing is applied.
+//! Otherwise, you can use the [`AntiAliasing`] enum either to disable antialiasing or to define
+//! an antialiasing background color.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -56,7 +65,7 @@ use embedded_graphics::{
 
 use rusttype::Font;
 
-/// Antialiasing can be difficult with embedded graphics since the background pixel is not known
+/// Antialiasing can be challenging with embedded graphics since the background pixel is not known
 /// during the drawing process.
 #[derive(Debug, Clone)]
 pub enum AntiAliasing<C> {
@@ -247,10 +256,7 @@ where
                         // There's still a possibility that the glyph clips the boundaries of the bitmap
                         if off_x >= 0 && off_x < width as i32 && off_y >= 0 && off_y < height as i32
                         {
-                            let c = (v * 255.0) as u32;
-
-                            let (text_r, text_g, text_b, text_a) =
-                                u32_to_rgba(c << 24 | (pixel_color_to_u32(text_color) & 0xFFFFFF));
+                            let text_a = (v * 255.0) as u32;
 
                             let bg_color = match self.anti_aliasing {
                                 AntiAliasing::BackgroundColor => self.background_color,
@@ -261,20 +267,21 @@ where
                                 None => if text_a > 127 {
                                     pixels.push(Pixel(
                                         Point::new(position.x + off_x, position.y + off_y),
-                                        Rgb888::new(text_r, text_g, text_b).into(),
+                                        text_color
                                     ));
                                 }
                                 Some(color) => {
-                                    let (new_r, new_g, new_b) = rgba_blend(
-                                        text_r,
-                                        text_g,
-                                        text_b,
-                                        text_a,
-                                        color,
-                                    );
+                                    let a = text_a as u16;
+                                    let fg = text_color.into();
+                                    let bg = color.into();
+                                    // blend with background color
+                                    let new_r = (a * fg.r() as u16 + (255-a) * bg.r() as u16) / 255;
+                                    let new_g = (a * fg.g() as u16 + (255-a) * bg.g() as u16) / 255;
+                                    let new_b = (a * fg.b() as u16 + (255-a) * bg.b() as u16) / 255;
+
                                     pixels.push(Pixel(
                                         Point::new(position.x + off_x, position.y + off_y),
-                                        Rgb888::new(new_r, new_g, new_b).into(),
+                                        Rgb888::new(new_r as u8, new_g as u8, new_b as u8).into(),
                                     ));
                                 }
                             }
@@ -417,85 +424,10 @@ impl<C: PixelColor> FontTextStyleBuilder<C> {
     }
 }
 
-fn pixel_color_to_u32<C: Into<Rgb888>>(color: C) -> u32 {
-    let color = color.into();
-
-    0xFF000000 | ((color.r() as u32) << 16) | ((color.g() as u32) << 8) | (color.b() as u32)
-}
-
-fn u32_to_rgba(color: u32) -> (u8, u8, u8, u8) {
-    (
-        ((color & 0x00FF0000) >> 16) as u8,
-        ((color & 0x0000FF00) >> 8) as u8,
-        (color & 0x000000FF) as u8,
-        ((color & 0xFF000000) >> 24) as u8,
-    )
-}
-
-fn rgba_to_rgb(r: u8, g: u8, b: u8, a: u8) -> (u8, u8, u8) {
-    let alpha = a as f32 / 255.;
-
-    (
-        (r as f32 * alpha).ceil() as u8,
-        (g as f32 * alpha).ceil() as u8,
-        (b as f32 * alpha).ceil() as u8,
-    )
-}
-
-fn rgba_blend<C: Into<Rgb888>>(
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
-    background_color: C,
-) -> (u8, u8, u8) {
-    let background_color_data = pixel_color_to_u32(background_color);
-    let (br, bg, bb, ba) = u32_to_rgba(background_color_data);
-    let (br, bg, bb) = rgba_to_rgb(br, bg, bb, ba);
-
-    let alpha = a as f32 / 255.;
-    let b_alpha = 1. - alpha;
-
-    // blend with background color
-    (
-        ((r as f32 * alpha) + br as f32 * b_alpha).ceil() as u8,
-        ((g as f32 * alpha) + bg as f32 * b_alpha).ceil() as u8,
-        ((b as f32 * alpha) + bb as f32 * b_alpha).ceil() as u8,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use embedded_graphics::pixelcolor::Rgb888;
 
-    #[test]
-    fn test_pixel_color_to_u32() {
-        assert_eq!(4294967295, pixel_color_to_u32(Rgb888::WHITE));
-        assert_eq!(4278190080, pixel_color_to_u32(Rgb888::BLACK));
-    }
-
-    #[test]
-    fn test_u32_to_rgba() {
-        assert_eq!((255, 255, 255, 255), u32_to_rgba(4294967295));
-        assert_eq!((0, 0, 0, 255), u32_to_rgba(4278190080));
-    }
-
-    #[test]
-    fn test_rgba_to_rgb() {
-        assert_eq!((255, 255, 255), rgba_to_rgb(255, 255, 255, 255));
-        assert_eq!((100, 100, 100), rgba_to_rgb(255, 255, 255, 100));
-    }
-
-    #[test]
-    fn test_rgba_background_to_rgb() {
-        assert_eq!(
-            (255, 255, 255),
-            rgba_background_to_rgb::<Rgb888>(255, 255, 255, 255, None)
-        );
-        assert_eq!(
-            (100, 100, 100),
-            rgba_background_to_rgb(255, 255, 255, 100, Some(Rgb888::BLACK))
-        );
-    }
+    //TODO
 }
